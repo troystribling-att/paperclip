@@ -239,5 +239,119 @@ module Paperclip
       private :find_credentials
 
     end
+   
+    #
+    # ATT Synaptic Storage
+    module Synaptic
+      def self.extended base
+        begin
+          require 'synaptic4r'
+        rescue LoadError => e
+          e.message << " (you may need to install synpatic4r: sudo gem install synaptic4r)"
+          raise e
+        end
+
+        base.instance_eval do
+          @credentials   = parse_credentials(@options[:synaptic_credentials])
+          @subtenant     = @credentials[:subtenant]
+          @uid           = @credentials[:uid]
+          @key           = @credentials[:key]
+          @root          = @options[:root] || ''
+          @link_lifetime = @options[:link_lifetime] || 30
+          @site          = "https://storage.synaptic.att.com/rest"
+          @client        = Synaptic4r::Client.new(:subtenant => attachment.subtenant, :uid => attachment.uid, :key => attachment.key, 
+                                                  :site => attachment.site)
+        end
+
+        Paperclip.interpolates(:synaptic_url) do |attachment, style|
+          attachment.client.get_obect_url(:rpath => "#{attachment.root}/#{attachment.path(style).gsub(/^\//, '')}", 
+                                          :lifetime => attachment.link_lifetime)
+        end
+
+      end
+
+      def client
+        @client
+      end
+
+      def root
+        @root
+      end
+
+      def parse_credentials(creds)
+        creds = find_credentials(creds).stringify_keys
+        (creds[RAILS_ENV] || creds).symbolize_keys
+      end
+      
+      def exists?(style = default_style)
+        if original_filename
+          begin
+            client.get_system_metadata(:rpath => "#{root}/#{path(style)}")
+          rescue RestClient::ResourceNotFound
+            false
+          else
+            true
+          end
+        else
+          false
+        end
+      end
+
+      # Returns representation of the data of the file assigned to the given
+      # style, in the format most representative of the current storage.
+      def to_file style = default_style
+        return @queued_for_write[style] if @queued_for_write[style]
+        file = Tempfile.new(path(style))
+        file.write(client.get(:rpath => "#{root}/#{path(style)}"))
+        file.rewind
+        return file
+      end
+
+#       def flush_writes #:nodoc:
+#         @queued_for_write.each do |style, file|
+#           begin
+#             log("saving #{path(style)}")
+#             AWS::S3::S3Object.store(path(style),
+#                                     file,
+#                                     bucket_name,
+#                                     {:content_type => instance_read(:content_type),
+#                                      :access => @s3_permissions,
+#                                     }.merge(@s3_headers))
+#           rescue AWS::S3::ResponseError => e
+#             raise
+#           end
+#         end
+#         @queued_for_write = {}
+#       end
+
+#       def flush_deletes #:nodoc:
+#         @queued_for_delete.each do |path|
+#           begin
+#             log("deleting #{path}")
+#             AWS::S3::S3Object.delete(path, bucket_name)
+#           rescue AWS::S3::ResponseError
+#             # Ignore this.
+#           end
+#         end
+#         @queued_for_delete = []
+#       end
+      
+      def find_credentials creds
+        case creds
+        when File
+          YAML.load_file(creds.path)
+        when String
+          YAML.load_file(creds)
+        when Hash
+          creds
+        else
+          raise ArgumentError, "Credentials are not a path, file, or hash."
+        end
+      end
+      private :find_credentials
+
+    end
+
   end
 end
+
