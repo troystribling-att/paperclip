@@ -307,34 +307,21 @@ module Paperclip
         return file
       end
 
-#       def flush_writes #:nodoc:
-#         @queued_for_write.each do |style, file|
-#           begin
-#             log("saving #{path(style)}")
-#             AWS::S3::S3Object.store(path(style),
-#                                     file,
-#                                     bucket_name,
-#                                     {:content_type => instance_read(:content_type),
-#                                      :access => @s3_permissions,
-#                                     }.merge(@s3_headers))
-#           rescue AWS::S3::ResponseError => e
-#             raise
-#           end
-#         end
-#         @queued_for_write = {}
-#       end
+      def flush_writes
+        @queued_for_write.each do |style, file|
+          log("saving #{path(style)}")
+          client.create_file(:rpath => "#{root}/#{path(style)}", :content_type => instance_read(:content_type))
+        end
+        @queued_for_write = {}
+      end
 
-#       def flush_deletes #:nodoc:
-#         @queued_for_delete.each do |path|
-#           begin
-#             log("deleting #{path}")
-#             AWS::S3::S3Object.delete(path, bucket_name)
-#           rescue AWS::S3::ResponseError
-#             # Ignore this.
-#           end
-#         end
-#         @queued_for_delete = []
-#       end
+      def flush_deletes
+        @queued_for_delete.each do |path|
+          log("deleting #{path}")
+          client.delete(:rpath => "#{root}/#{path(style)}")
+        end
+        @queued_for_delete = []
+      end
       
       def find_credentials creds
         case creds
