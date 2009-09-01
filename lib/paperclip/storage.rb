@@ -259,8 +259,7 @@ module Paperclip
           @root          = @options[:root] || ''
           @link_lifetime = @options[:link_lifetime] || 30
           @site          = "https://storage.synaptic.att.com/rest"
-          @client        = Synaptic4r::Client.new(:subtenant => attachment.subtenant, :uid => attachment.uid, :key => attachment.key, 
-                                                  :site => attachment.site)
+          @client        = Synaptic4r::Client.new(:subtenant => @subtenant, :uid => @uid, :key => @key, :site => @site)
         end
 
         Paperclip.interpolates(:synaptic_url) do |attachment, style|
@@ -310,7 +309,8 @@ module Paperclip
       def flush_writes
         @queued_for_write.each do |style, file|
           log("saving #{path(style)}")
-          client.create_file(:rpath => "#{root}/#{path(style)}", :content_type => instance_read(:content_type))
+          client.create_file(:rpath => "#{root}/#{path(style)}".chomp('.'), :file => file, 
+                             :content_type => instance_read(:content_type))
         end
         @queued_for_write = {}
       end
